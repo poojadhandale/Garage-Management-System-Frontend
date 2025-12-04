@@ -1,0 +1,24 @@
+/* You can add global styles to this file, and also import other style files */
+body {
+  background-color: #f5f7fa;
+  font-family: 'Poppins', sans-serif;
+}
+.card {
+  border-radius: 12px;
+}
+.btn {
+  font-weight: 600;
+}
+/* Toastr tweaks */
+.toast-success {
+  background-color: #205295 !important;
+}
+.toast-error {
+  background-color: #e63946 !important;
+}
+.toast-info {
+  background-color: #3b9ae1 !important;
+}
+.toast-warning {
+  background-color: #ffb703 !important;
+}

@@ -1,0 +1,276 @@
+<div class="servicing-page">
+    <div class="sidebar">
+        <!-- LEFT SIDEBAR -->
+        <div class="sidebar">
+            <div class="sidebar-logo">
+                🚗 Garage Manager
+            </div>
+
+            <div class="sidebar-links">
+                <a (click)="router.navigate(['/dashboard'])">Dashboard</a>
+                <a (click)="router.navigate(['/stocks'])">Stocks</a>
+                <a (click)="router.navigate(['/customers'])">Customers</a>
+                <a (click)="router.navigate(['/servicing'])" class="active">Servicing</a>
+                <a (click)="router.navigate(['/reports'])">Reports</a>
+            </div>
+
+            <div class="sidebar-footer">
+                <p class="welcome-text">Hi, {{ username }}</p>
+                <button (click)="logout()" class="logout-btn">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="content-area">
+        <div class="servicing-container">
+
+            <!-- Header -->
+            <div class="header d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fa-solid fa-screwdriver-wrench"></i> Service Records</h2>
+
+                <div class="actions d-flex gap-2">
+                    <input type="text" class="form-control search-input" placeholder="Search by customer or vehicle..."
+                        [(ngModel)]="searchTerm" />
+                    <button class="btn btn-primary" (click)="openModal()">+ Add Service</button>
+                </div>
+            </div>
+
+            <!-- Loader -->
+            <div *ngIf="loading" class="text-center p-3 text-primary fw-bold">
+                Loading servicing...
+            </div>
+
+            <!-- Table -->
+            <div class="table-card shadow-sm" *ngIf="!loading">
+                <table class="table table-hover table-striped">
+                    <thead class="table-header">
+                        <tr>
+                            <th>#</th>
+                            <th>Customer</th>
+                            <th>Vehicle</th>
+                            <th>Date</th>
+                            <th>Cost</th>
+                            <th>Remarks</th>
+                            <th>Items Used</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        <tr *ngFor="let s of filteredServices(); let i = index">
+                            <td>{{ i + 1 }}</td>
+                            <td>{{ s.customer.customerName }}</td>
+                            <td>{{ s.customer.vehicleNo }}</td>
+                            <td>{{ s.serviceDate | date:'dd MMM yyyy' }}</td>
+                            <td>₹{{ s.totalCost }}</td>
+                            <td>{{ s.remarks }}</td>
+
+                            <td>
+                                <ul class="items-list">
+                                    <li *ngFor="let item of s.stocks">
+                                        {{ item.stockName }} (x{{ item.quantityUsed }})
+                                    </li>
+                                </ul>
+                            </td>
+
+                            <td>
+                                <button class="btn btn-download btn-sm me-2" (click)="downloadBill()">
+                                    <i class="fa-solid fa-download"></i>
+                                </button>
+                                <button class="btn btn-warning btn-sm me-2" (click)="openModal(s)">
+                                    <i class="fa-solid fa-pen"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm" (click)="deleteService(s)">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+
+                        <tr *ngIf="!paginatedServices.length">
+                            <td colspan="8" class="text-center text-muted py-3">No records found</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="pagination-container mt-3">
+                    <button class="btn btn-outline-primary btn-sm" (click)="prevPage()" [disabled]="currentPage === 1">
+                        ‹ Prev
+                    </button>
+
+                    <button *ngFor="let page of getVisiblePages()" class="page-btn"
+                        [class.active]="currentPage === page" (click)="goToPage(page)">
+                        {{ page }}
+                    </button>
+
+                    <button class="btn btn-outline-primary btn-sm" (click)="nextPage()"
+                        [disabled]="currentPage === totalPages">
+                        Next ›
+                    </button>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-backdrop" *ngIf="showModal">
+        <div class="modal-box shadow modal-lg-box">
+
+            <h4 class="mb-3 text-primary fw-bold">
+                {{ editMode ? 'Edit Service Record' : 'Add New Service' }}
+            </h4>
+
+            <form (ngSubmit)="saveService()">
+
+                <!-- ========== ROW 1: VEHICLE SEARCH + SERVICE DATE ========== -->
+                <div class="row g-3">
+
+                    <div class="col-md-6 position-relative">
+                        <label class="fw-semibold">Search Vehicle No</label>
+                        <input type="text" class="form-control" placeholder="Type vehicle number..."
+                            [(ngModel)]="vehicleSearch" (input)="filterVehicle()" name="vehicleSearch" />
+
+                        <ul *ngIf="filteredCustomers.length" class="list-group suggestion-box mt-1">
+                            <li *ngFor="let c of filteredCustomers" class="list-group-item list-group-item-action"
+                                (click)="selectCustomer(c)">
+                                {{ c.customerName }} | {{ c.vehicleNo }}
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="fw-semibold">Service Date</label>
+                        <input type="date" class="form-control" [(ngModel)]="currentService.serviceDate" name="date"
+                            required>
+                    </div>
+
+                </div>
+
+                <!-- ========== ROW 2: CUSTOMER DETAILS ========== -->
+                <div class="customer-details-box mt-3">
+                    <h6 class="text-secondary fw-bold mb-2">Customer Details</h6>
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label>Name</label>
+                            <input type="text" class="form-control" [(ngModel)]="currentService.customer.customerName"
+                                [ngModelOptions]="{standalone:true}" readonly>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label>Email</label>
+                            <input type="text" class="form-control" [(ngModel)]="currentService.customer.email"
+                                [ngModelOptions]="{standalone:true}" readonly>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label>Phone</label>
+                            <input type="text" class="form-control" [(ngModel)]="currentService.customer.phone"
+                                [ngModelOptions]="{standalone:true}" readonly>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== ROW 3: COST + REMARKS ========== -->
+                <div class="row mt-3 g-3">
+                    <div class="col-md-6">
+                        <label>Total Cost (₹)</label>
+                        <input type="number" class="form-control" [(ngModel)]="currentService.totalCost" name="cost"
+                            required>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Remarks</label>
+                        <input class="form-control" [(ngModel)]="currentService.remarks" name="remarks">
+                    </div>
+                </div>
+
+                <!-- ========== ROW 4: STOCK SEARCH ========== -->
+                <div class="row mt-3 g-3">
+                    <div class="col-md-12 position-relative">
+                        <label class="fw-semibold">Add Stock Items</label>
+                        <input type="text" class="form-control" placeholder="Search stock..." [(ngModel)]="stockSearch"
+                            (input)="filterStock()" name="stockSearch" />
+
+                        <ul *ngIf="filteredStocks.length" class="list-group suggestion-box mt-1">
+                            <li *ngFor="let s of filteredStocks" class="list-group-item list-group-item-action"
+                                (click)="selectStock(s)">
+                                {{ s.itemName }} (₹{{ s.price }})
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- ========== STOCK TABLE ========== -->
+                <div *ngIf="currentService.stocks.length" class="p-3 rounded border bg-light mt-3">
+
+                    <h6 class="fw-bold text-secondary mb-2">Items Used</h6>
+
+                    <table class="table table-bordered table-sm align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Item</th>
+                                <th style="width: 120px;">Qty</th>
+                                <th style="width: 100px;">Price</th>
+                                <th style="width: 120px;">Total</th>
+                                <th style="width: 60px;"></th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            <tr *ngFor="let item of currentService.stocks; let i = index">
+
+                                <td>{{ item.stockName }}</td>
+
+                                <td class="text-center">
+                                    <div class="d-flex justify-content-center align-items-center gap-2">
+                                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                            (click)="updateQty(i, -1)">−</button>
+                                        <span>{{ item.quantityUsed }}</span>
+                                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                            (click)="updateQty(i, +1)">+</button>
+                                    </div>
+                                </td>
+
+                                <td>₹{{ item.price }}</td>
+
+                                <td>₹{{ item.price * item.quantityUsed }}</td>
+
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-danger" (click)="removeStock(i)">
+                                        ✕
+                                    </button>
+                                </td>
+
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="text-end fw-bold fs-5 mt-2">
+                        Grand Total: ₹{{ grandTotal }}
+                    </div>
+
+                </div>
+
+                <!-- ========== ACTION BUTTONS ========== -->
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        {{ editMode ? 'Update' : 'Add' }}
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+    </div>
+
+
+    <footer class="footer text-center mt-4">
+        <p>© {{ currentYear }} Garage Management System</p>
+    </footer>
+
+</div>

@@ -1,0 +1,129 @@
+<div class="dashboard-page">
+  <div class="sidebar">
+    <!-- LEFT SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-logo">
+        🚗 Garage Manager
+      </div>
+
+      <div class="sidebar-links">
+        <a (click)="router.navigate(['/dashboard'])" class="active">Dashboard</a>
+        <a (click)="router.navigate(['/stocks'])">Stocks</a>
+        <a (click)="router.navigate(['/customers'])">Customers</a>
+        <a (click)="router.navigate(['/servicing'])">Servicing</a>
+        <a (click)="router.navigate(['/reports'])">Reports</a>
+      </div>
+
+      <div class="sidebar-footer">
+        <p class="welcome-text">Hi, {{ username }}</p>
+        <button (click)="logout()" class="logout-btn">
+          <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="content-area">
+    <!-- ✅ Main Container -->
+    <div class="customers-container">
+      <div class="header d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fa-solid fa-users me-2"></i> Dashboard</h2>
+        <button class="btn btn-outline-primary" (click)="loadAll()" [disabled]="loading">
+          Refresh
+        </button>
+        
+      </div>
+    </div>
+
+    <div *ngIf="loading" class="dashboard-loading">
+      <div class="shimmer-card" *ngFor="let n of [1,2,3,4]"></div>
+    </div>
+
+    <div *ngIf="!loading" class="dashboard-grid">
+
+      <!-- Cards -->
+      <div class="card card-summary">
+        <div class="card-title">Total Customers</div>
+        <div class="card-value">{{ summary?.totalCustomers ?? 0 }}</div>
+        <div class="card-sub">Customers registered</div>
+      </div>
+
+      <div class="card card-summary">
+        <div class="card-title">Total Services</div>
+        <div class="card-value">{{ summary?.totalServices ?? 0 }}</div>
+        <div class="card-sub">Services completed</div>
+      </div>
+
+      <div class="card card-summary">
+        <div class="card-title">Total Stocks</div>
+        <div class="card-value">{{ summary?.totalStocks ?? 0 }}</div>
+        <div class="card-sub">Stock items available</div>
+      </div>
+
+      <div class="card card-summary">
+        <div class="card-title">Revenue (This Month)</div>
+        <div class="card-value">₹{{ fmt(summary?.monthlyRevenue ?? 0) }}</div>
+        <div class="card-sub">Collected this month</div>
+      </div>
+
+      <!-- Charts row -->
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">Monthly Services</div>
+          <div class="chart-body">
+            <canvas #serviceCountCanvas></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">Monthly Revenue</div>
+          <div class="chart-body">
+            <canvas #revenueCanvas></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card small">
+          <div class="chart-header">Stock Usage</div>
+          <div class="chart-body pie">
+            <canvas #stockCanvas></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent services -->
+      <div class="recent-services">
+        <div class="recent-header">
+          <h5>Recent Services</h5>
+        </div>
+
+        <table class="table recent-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Customer</th>
+              <th>Vehicle</th>
+              <th>Date</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of recent; let i = index">
+              <td>{{ i + 1 }}</td>
+              <td>{{ r.customerName }}</td>
+              <td>{{ r.vehicleNo }}</td>
+              <td>{{ r.date | date: 'dd MMM yyyy' }}</td>
+              <td>₹{{ fmt(r.totalCost) }}</td>
+            </tr>
+            <tr *ngIf="recent.length === 0">
+              <td colspan="5" class="text-muted text-center">No recent services</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <footer class="footer text-center mt-4">
+    <p>© {{ currentYear }} Garage Management System</p>
+  </footer>
+</div>

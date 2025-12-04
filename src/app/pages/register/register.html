@@ -1,0 +1,75 @@
+<div class="container d-flex justify-content-center align-items-center vh-100 bg-light">
+  <div class="card shadow p-4" style="width: 420px; border-radius: 1rem;">
+    <h3 class="text-center mb-4 text-primary fw-bold">Create Account</h3>
+
+    <form (ngSubmit)="onRegister()" [formGroup]="registerForm">
+      <!-- Username -->
+      <div class="mb-3">
+        <label for="username" class="form-label">Username</label>
+        <input
+          id="username"
+          type="text"
+          class="form-control"
+          formControlName="username"
+          placeholder="Enter username"
+          required
+        />
+      </div>
+
+      <!-- Email -->
+      <div class="mb-3">
+        <label for="email" class="form-label">Email</label>
+        <input
+          id="email"
+          type="email"
+          class="form-control"
+          formControlName="email"
+          placeholder="Enter email"
+          required
+        />
+      </div>
+
+      <!-- Password -->
+      <div class="mb-4 password-wrapper">
+        <label for="password" class="form-label">Password</label>
+        <div class="position-relative">
+          <input
+            id="password"
+            [type]="showPassword ? 'text' : 'password'"
+            class="form-control password-input"
+            formControlName="password"
+            placeholder="Enter password"
+            required
+          />
+          <i
+            [class.fa-solid]="true"
+            [class.fa-eye]="!showPassword"
+            [class.fa-eye-slash]="showPassword"
+            class="password-toggle"
+            (click)="showPassword = !showPassword"
+            title="Show/Hide Password"
+          ></i>
+        </div>
+      </div>
+
+      <!-- Register Button -->
+      <button type="submit" class="btn btn-primary w-100" [disabled]="registerForm.invalid">
+        Register
+      </button>
+
+      <div class="action-buttons">
+        <button type="button" routerLink="/login">Already have an account? Login</button>
+      </div>
+
+      <!-- Error message -->
+      <div *ngIf="errorMessage" class="text-danger text-center mt-3">
+        {{ errorMessage }}
+      </div>
+
+      <!-- Success message -->
+      <div *ngIf="successMessage" class="text-success text-center mt-3">
+        {{ successMessage }}
+      </div>
+    </form>
+  </div>
+</div>
