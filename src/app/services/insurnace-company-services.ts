@@ -1,14 +1,14 @@
 import { Inject, Injectable, PLATFORM_ID } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { Observable } from 'rxjs';
 import { isPlatformBrowser } from '@angular/common';
 
-export interface Stock {
+export interface InsuranceCompany {
   id?: number;
-  itemName: string;
-  category: string;
-  quantity: number;
-  price: number;
+  companyName: string;
+  contactNumber: string;
+  email: string;
+  active: boolean;
 }
 
 export interface PageResponse<T> {
@@ -27,10 +27,8 @@ export interface ApiResponse<T> {
   data: T;
 }
 
-@Injectable({
-  providedIn: 'root',
-})
-export class Service {
+@Injectable({ providedIn: 'root' })
+export class InsurnaceCompanyServices {
   private baseUrl = 'http://localhost:8080/api';
 
   constructor(
@@ -46,46 +44,46 @@ export class Service {
 
     return new HttpHeaders({
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
     });
   }
 
-  getStocks(
+  getAll(
     page: number = 0,
     size: number = 10,
     searchTerm: string = ''
-  ): Observable<ApiResponse<PageResponse<Stock>>> {
-
-    const params: any = {
-      page, size
+  ): Observable<ApiResponse<PageResponse<InsuranceCompany>>> {
+   const params: any = {
+      page,
+      size
     };
     if (searchTerm && searchTerm.trim()) {
       params.search = searchTerm.trim();
     }
-    return this.http.get<ApiResponse<PageResponse<Stock>>>(
-      `${this.baseUrl}/stocks`,
-      {
-        headers: this.getHeaders(),
-        params
-      }
-    );
+    return this.http.get<ApiResponse<PageResponse<InsuranceCompany>>>(
+       `${this.baseUrl}/insurance-companies`, {
+      headers: this.getHeaders(),
+      params
+    }
+  );
   }
 
-  addStock(stock: Stock): Observable<any> {
-    return this.http.post(`${this.baseUrl}/stocks`, stock, {
-      headers: this.getHeaders(),
+  add(company: InsuranceCompany): Observable<any> {
+    return this.http.post(`${this.baseUrl}/insurance-companies`, company, {
+      headers: this.getHeaders()
     });
   }
 
-  updateStock(id: number, stock: Stock): Observable<any> {
-    return this.http.put(`${this.baseUrl}/stocks/${id}`, stock, {
-      headers: this.getHeaders(),
+  update(id: number, company: InsuranceCompany): Observable<any> {
+    return this.http.put(`${this.baseUrl}/insurance-companies/${id}`, company, {
+      headers: this.getHeaders()
     });
   }
 
-  deleteStock(id: number): Observable<any> {
-    return this.http.delete(`${this.baseUrl}/stocks/${id}`, {
-      headers: this.getHeaders(),
+  delete(id: number): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/insurance-companies/${id}`, {
+      headers: this.getHeaders()
     });
   }
 }
+

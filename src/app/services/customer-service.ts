@@ -3,12 +3,38 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { isPlatformBrowser } from '@angular/common';
 
+export interface Vehicle {
+  vehicleNo: string;
+  model: string;
+  customer: {
+    id: number;
+    customerName: string;
+  };
+}
+
 export interface Customer {
   id?: number;
   customerName: string;
   email: string;
   phone: string;
-  vehicleNo: string;
+  address: string;
+  vehicles: Vehicle[];
+}
+
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number; // current page (0-based)
+  size: number;
+  first: boolean;
+  last: boolean;
+}
+
+export interface ApiResponse<T> {
+  status: number;
+  message: string;
+  data: T;
 }
 
 @Injectable({
@@ -35,10 +61,23 @@ export class CustomerService {
   }
 
   /** ✅ Get all customers */
-  getCustomers(): Observable<Customer[]> {
-    return this.http
-      .get<any>(`${this.baseUrl}/customers`, { headers: this.getHeaders() })
-      .pipe(map((res) => res?.data || []));
+  getCustomers(
+    page: number = 0,
+    size: number = 10,
+  ): Observable<ApiResponse<PageResponse<Customer>>> {
+
+    const params: any = {
+      page,
+      size
+    };
+
+    return this.http.get<ApiResponse<PageResponse<Customer>>>(
+      `${this.baseUrl}/customers`,
+      {
+        headers: this.getHeaders(),
+        params
+      }
+    );
   }
 
   /** ✅ Add customer */

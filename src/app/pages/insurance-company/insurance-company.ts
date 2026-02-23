@@ -1,50 +1,53 @@
-import { CommonModule, isPlatformBrowser } from '@angular/common';
 import {
-  ChangeDetectorRef,
   Component,
+  ChangeDetectorRef,
   Inject,
   NgZone,
   OnInit,
-  PLATFORM_ID,
+  PLATFORM_ID
 } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
-import { HttpClientModule } from '@angular/common/http';
 import { ToastrService } from 'ngx-toastr';
-import { Service, Stock } from '../../services/stock-service';
+import {
+ InsuranceCompany, InsurnaceCompanyServices
+} from '../../services/insurnace-company-services';
+import { HttpClientModule } from '@angular/common/http';
 
 @Component({
-  selector: 'app-stocks',
+  selector: 'app-insurance',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterModule, HttpClientModule, CommonModule, FormsModule],
-  templateUrl: './stocks.html',
-  styleUrls: ['./stocks.css'],
+  imports: [ReactiveFormsModule, RouterModule, HttpClientModule, FormsModule],
+  templateUrl: './insurance-company.html',
+  styleUrls: ['./insurance-company.css']
 })
-export class StocksComponent implements OnInit {
-  stocks: Stock[] = [];
-  pageSize = 10;
+export class InsuranceComponent implements OnInit {
+  companies: InsuranceCompany[] = [];
   currentPage = 0;
+  pageSize = 10;
   totalPages = 0;
   totalElements = 0;
-  currentStock: Stock = {
-    itemName: '',
-    category: '',
-    quantity: 0,
-    price: 0
+  currentCompany: InsuranceCompany = {
+    companyName: '',
+    contactNumber: '',
+    email: '',
+    active: false
   };
   username: string | null = null;
   showModal = false;
   editMode = false;
   loading = false;
   searchTerm = '';
+
   currentYear = new Date().getFullYear();
 
   constructor(
-    public router: Router,
-    private api: Service,
+    private api: InsurnaceCompanyServices,
     private toastr: ToastrService,
-    private cdr: ChangeDetectorRef,
+    public router: Router,
     private zone: NgZone,
+    private cdr: ChangeDetectorRef,
     @Inject(PLATFORM_ID) private platformId: Object
   ) { }
 
@@ -52,7 +55,7 @@ export class StocksComponent implements OnInit {
     if (isPlatformBrowser(this.platformId)) {
       this.username = this.getFormattedUsername();
       Promise.resolve().then(() => {
-        this.getStocks(); // ← call directly, no timeout
+        this.getCompanies();
       });
     }
   }
@@ -64,17 +67,15 @@ export class StocksComponent implements OnInit {
     return name.charAt(0).toUpperCase() + name.slice(1);
   }
 
-  /** ✅ Fetch all stocks */
-  getStocks(): void {
-
-    this.api.getStocks(
+  getCompanies(): void {
+    this.api.getAll(
       this.currentPage,
       this.pageSize,
       this.searchTerm
     ).subscribe({
       next: (res) => {
         this.zone.run(() => {
-          this.stocks = res.data.content;
+          this.companies = res.data.content;
           this.totalPages = res.data.totalPages;
           this.totalElements = res.data.totalElements;
 
@@ -86,27 +87,14 @@ export class StocksComponent implements OnInit {
         });
       },
       error: (err) => {
-        console.error('Error fetching stocks:', err);
+        console.error('Error fetching customers:', err);
       }
     });
   }
 
-
-
-  /** ✅ Search Filter */
-  filteredStocks(): Stock[] {
-    const term = this.searchTerm.toLowerCase().trim();
-    if (!term) return this.stocks;
-    return this.stocks.filter(
-      (s) =>
-        s.itemName.toLowerCase().includes(term) ||
-        s.category.toLowerCase().includes(term)
-    );
-  }
-
   onSearch(): void {
     this.currentPage = 0; // reset to first page
-    this.getStocks();
+    this.getCompanies();
   }
 
   getVisiblePages(): number[] {
@@ -116,56 +104,54 @@ export class StocksComponent implements OnInit {
   goToPage(page: number): void {
     if (page < 0 || page >= this.totalPages) return;
     this.currentPage = page;
-    this.getStocks();
+    this.getCompanies();
   }
 
   prevPage(): void {
     if (this.currentPage > 0) {
       this.currentPage--;
-      this.getStocks();
+      this.getCompanies();
     }
   }
 
   nextPage(): void {
     if (this.currentPage < this.totalPages - 1) {
       this.currentPage++;
-      this.getStocks();
+      this.getCompanies();
     }
   }
 
-  /** ✅ Modal Controls */
-  openModal(stock?: Stock) {
-    this.zone.run(() => {
-      this.showModal = true;
-      this.editMode = !!stock;
-      this.currentStock = stock
-        ? { ...stock }
-        : {
-          itemName: '', category: '',
-          quantity: 0, price: 0
-        };
-      this.cdr.detectChanges();
-    });
+  openModal(company?: InsuranceCompany): void {
+    this.showModal = true;
+    this.editMode = !!company;
+    this.currentCompany = company
+      ? { ...company }
+      : {
+        companyName: '',
+        contactNumber: '',
+        email: '',
+        active: false
+      };
+    this.cdr.detectChanges();
   }
 
-  closeModal(): void {
+  closeModal() {
     this.zone.run(() => {
       this.showModal = false;
       this.cdr.detectChanges();
     });
   }
 
-  /** ✅ Save / Update Stock */
-  saveStock(): void {
+  saveCompany(): void {
     const apiCall = this.editMode
-      ? this.api.updateStock(this.currentStock.id!, this.currentStock)
-      : this.api.addStock(this.currentStock);
+      ? this.api.update(this.currentCompany.id!, this.currentCompany)
+      : this.api.add(this.currentCompany);
 
     apiCall.subscribe({
       next: (res) => {
-        this.toastr.success(res.message || 'Operation successful');
+        this.toastr.success(res.message || 'Saved successfully');
         this.zone.run(() => {
-          this.getStocks();
+          this.getCompanies();
           this.closeModal();
         });
       },
@@ -177,26 +163,22 @@ export class StocksComponent implements OnInit {
     this.closeModal();
   }
 
-  /** ✅ Edit Stock */
-  editStock(stock: Stock): void {
-    this.openModal(stock);
-  }
-
-  /** ✅ Delete Stock */
-  deleteStock(stock: Stock): void {
-    if (stock.id && confirm(`Delete "${stock.itemName}"?`)) {
-      this.api.deleteStock(stock.id).subscribe({
+  deleteCompany(company: InsuranceCompany): void {
+    if (!company.id) return;
+    if (confirm(`Delete "${company.companyName}"?`)) {
+      this.api.delete(company.id).subscribe({
         next: () => {
-          this.toastr.success('Stock deleted!');
-          this.zone.run(() => this.getStocks());
+          this.toastr.success('Deleted');
+          this.getCompanies();
         },
-        error: (err: any) => {
+        error: (err) => {
           console.error('Delete error:', err);
-          this.toastr.error('Failed to delete stock');
-        },
+          this.toastr.error('Failed to delete companies.');
+        }
       });
     }
   }
+
 
   /** ✅ Logout */
   logout(): void {

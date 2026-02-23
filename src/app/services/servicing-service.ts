@@ -1,87 +1,162 @@
 import { Inject, Injectable, PLATFORM_ID } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { Observable } from 'rxjs';
 import { isPlatformBrowser } from '@angular/common';
 
+/* ===== REQUEST MODELS ===== */
+export interface ServiceItemRequest {
+  stockId: number;
+  quantityUsed: number;
+}
 
-export interface ServiceRecord {
-  id?: number;
-  customer: {
-    id?: number;
-    customerName: string;
-    email: string;
-    phone: string;
-    vehicleNo: string;
-  };
+export interface LabourRequest {
+  labourDescription: string;
+  amount: number;
+}
+
+export interface ServicingRequest {
+  vehicleId: number;
   serviceDate: string;
-  totalCost: number;
   remarks: string;
-  stocks: {
-    id?: number;
+  totalCost: number;
+  insuranceClaim: boolean;
+
+  itemsUsed: {
     stockId: number;
-    price: number;
-    stockName: string;
     quantityUsed: number;
+  }[];
+
+  labour: {
+    labourDescription: string;
+    amount: number;
   }[];
 }
 
-@Injectable({
-  providedIn: 'root',
-})
+export interface Vehicle {
+  vehicleNo: string;
+  model: string;
+  customer: {
+    id: number;
+    customerName: string;
+  };
+}
+
+/* ===== RESPONSE MODELS ===== */
+export interface ServiceRecord {
+  id?: number;
+  serviceDate: string;
+  totalCost: number;
+  remarks: string;
+  insuranceClaim: boolean;
+
+  customer: {
+    id: number;
+    customerName: string;
+  };
+
+  vehicle: {
+    id: number;
+    vehicleNo: string;
+    model: string;
+  };
+
+  itemsUsed: {
+    id?: number;
+    quantityUsed: number;
+    stock?: {
+      id: number;
+      itemName: string;
+      price: number;
+    };
+  }[];
+
+  labour: {
+    id?: number;
+    labourDescription: string;
+    amount: number;
+  }[];
+}
+
+
+export interface ApiResponse<T> {
+  status: number;
+  message: string;
+  data: T;
+}
+
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+  first: boolean;
+  last: boolean;
+}
+
+@Injectable({ providedIn: 'root' })
 export class ServicePageApi {
   
   private baseUrl = 'http://localhost:8080/api';
 
-   constructor(
+  constructor(
     private http: HttpClient,
     @Inject(PLATFORM_ID) private platformId: Object
   ) { }
 
   private getHeaders(): HttpHeaders {
-    let token = '';
-    if (isPlatformBrowser(this.platformId)) {
-      token = localStorage.getItem('token') || '';
-    }
+    const token = isPlatformBrowser(this.platformId)
+      ? localStorage.getItem('token') || ''
+      : '';
 
     return new HttpHeaders({
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
     });
   }
 
-    /** ✅ Get all servicing */
-  getAll(): Observable<ServiceRecord[]> {
-    return this.http
-       .get<any>(`${this.baseUrl}/services`, { headers: this.getHeaders() })
-      .pipe(map((res) => res?.data || []));
+  /** ✅ Get all servicing (paginated) */
+  getAll(
+    page = 0,
+    size = 10,
+    search = ''
+  ): Observable<ApiResponse<PageResponse<ServiceRecord>>> {
+    const params: any = { page, size };
+    if (search.trim()) params.search = search.trim();
+
+    return this.http.get<ApiResponse<PageResponse<ServiceRecord>>>(
+      `${this.baseUrl}/services`,
+      { headers: this.getHeaders(), params }
+    );
+  }
+
+  getVehicles(): Observable<ApiResponse<Vehicle[]>> {
+    return this.http.get<ApiResponse<Vehicle[]>>(
+      `${this.baseUrl}/vehicles`,
+      {
+        headers: this.getHeaders()
+      });
   }
 
   /** ✅ Add servicing */
-   addService(servicing: ServiceRecord): Observable<any> {
-     return this.http.post(`${this.baseUrl}/services`, servicing, {
-       headers: this.getHeaders(),
-     });
-   }
- 
-   /** ✅ Update servicing */
-   updateService(id: number, servicing: ServiceRecord): Observable<any> {
-     return this.http.put(`${this.baseUrl}/services/${id}`, servicing, {
-       headers: this.getHeaders(),
-     });
-   }
- 
-   /** ✅ Delete customer */
-   deleteService(id: number): Observable<any> {
-     return this.http.delete(`${this.baseUrl}/services/${id}`, {
-       headers: this.getHeaders(),
-     });
-   }
+  addService(payload: ServicingRequest): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>(
+      `${this.baseUrl}/services`,
+      payload,
+      { headers: this.getHeaders() }
+    );
+  }
 
- /** ✅ download Bill */
-   downloadBill(id: number): Observable<any> {
-     return this.http.post(`${this.baseUrl}/download/${id}`, {
-       headers: this.getHeaders(),
-     });
-   }
- 
+  updateService(id: number, service: ServicingRequest): Observable<any> {
+    return this.http.put(`${this.baseUrl}/services/${id}`, service, {
+      headers: this.getHeaders()
+    });
+  }
+
+  /** ✅ Delete servicing */
+  deleteService(id: number): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/services/${id}`, {
+      headers: this.getHeaders()
+    });
+  }
 }

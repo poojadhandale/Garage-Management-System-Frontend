@@ -8,10 +8,10 @@
 
       <div class="sidebar-links">
         <a (click)="router.navigate(['/dashboard'])">Dashboard</a>
-        <a (click)="router.navigate(['/stocks'])" class="active">Stocks</a>
+        <a (click)="router.navigate(['/stocks'])">Stocks</a>
         <a (click)="router.navigate(['/customers'])">Customers</a>
         <a (click)="router.navigate(['/servicing'])">Servicing</a>
-        <a (click)="router.navigate(['/insurance-company'])">Insurance Companies</a>
+        <a (click)="router.navigate(['/insurance-company'])" class="active">Insurance Companies</a>
       </div>
 
       <div class="sidebar-footer">
@@ -29,7 +29,7 @@
     <div class="stock-container">
       <div class="header d-flex justify-content-between align-items-center mb-4">
         <h2 class="fw-bold text-primary">
-          <i class="fa-solid fa-boxes-stacked me-2"></i> Stock Management
+          <i class="fa-solid fa-boxes-stacked me-2"></i> Insurance Companies
         </h2>
 
         <div class="actions d-flex align-items-center gap-2">
@@ -54,32 +54,32 @@
               <thead class="table-header text-white">
                 <tr>
                   <th>#</th>
-                  <th>Item Name</th>
-                  <th>Category</th>
-                  <th>Quantity</th>
-                  <th>Price (₹)</th>
+                  <th>Company Name</th>
+                  <th>Phone</th>
+                  <th>Email</th>
+                  <th>Active Or NotActive</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                @for (s of stocks; track s; let i = $index) {
+                @for (c of companies; track c; let i = $index) {
                   <tr>
-                    <td> {{ currentPage * pageSize + i + 1 }}</td>
-                    <td>{{ s.itemName }}</td>
-                    <td>{{ s.category }}</td>
-                    <td>{{ s.quantity }}</td>
-                    <td>₹{{ s.price | number: '1.2-2' }}</td>
+                    <td>{{ i + 1 }}</td>
+                    <td>{{ c.companyName }}</td>
+                    <td>{{ c.contactNumber }}</td>
+                    <td>{{ c.email }}</td>
+                    <td>{{ c.active ? 'Active' : 'Not Active' }}</td>
                     <td>
-                      <button class="btn btn-sm btn-warning me-2" (click)="editStock(s)">
+                      <button class="btn btn-warning btn-sm me-2" (click)="openModal(c)">
                         <i class="fa-solid fa-pen"></i>
                       </button>
-                      <button class="btn btn-sm btn-danger" (click)="deleteStock(s)">
+                      <button class="btn btn-danger btn-sm" (click)="deleteCompany(c)">
                         <i class="fa-solid fa-trash"></i>
                       </button>
                     </td>
                   </tr>
                 }
-                @if (!stocks.length) {
+                @if (!companies.length) {
                   <tr>
                     <td colspan="8" class="text-center text-muted py-3">No records found</td>
                   </tr>
@@ -91,8 +91,8 @@
                 ‹ Prev
               </button>
               @for (page of getVisiblePages(); track page) {
-                <button class="page-btn" [class.active]="currentPage === page"
-                  (click)="goToPage(page)">
+                <button class="page-btn"
+                  [class.active]="currentPage === page" (click)="goToPage(page)">
                   {{ page + 1 }}
                 </button>
               }
@@ -110,35 +110,39 @@
     @if (showModal) {
       <div class="modal-backdrop">
         <div class="modal-box shadow">
-          <h4 class="mb-3">{{ editMode ? 'Edit Stock' : 'Add New Stock' }}</h4>
-          <form (ngSubmit)="saveStock()">
+          <h4>{{ editMode ? 'Edit Insurance Company' : 'Add Insurance Company' }}</h4>
+          <form (ngSubmit)="saveCompany()">
             <div class="mb-3">
-              <label>Item Name</label>
-              <input type="text" [(ngModel)]="currentStock.itemName" name="itemName" class="form-control" required />
+              <label>Company Name</label>
+              <input type="text" [(ngModel)]="currentCompany.companyName" name="companyName" class="form-control"
+                required />
+              </div>
+              <div class="mb-3">
+                <label>Phone</label>
+                <input type="tel" [(ngModel)]="currentCompany.contactNumber" name="contactNumber"
+                  class="form-control" required pattern="[0-9]{10}" maxlength="10"
+                  placeholder="Enter 10-digit phone number" />
+                </div>
+                <div class="mb-3">
+                  <label>Email</label>
+                  <input type="email" [(ngModel)]="currentCompany.email" name="email" class="form-control" required />
+                </div>
+                <div class="mb-3">
+                  <label>Active</label>
+                  <input type="checkbox" [(ngModel)]="currentCompany.active" name="active" class="form-check-input"
+                    required />
+                  </div>
+                  <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-success">{{ editMode ? 'Update' : 'Add' }}</button>
+                  </div>
+                </form>
+              </div>
             </div>
-            <div class="mb-3">
-              <label>Category</label>
-              <input type="text" [(ngModel)]="currentStock.category" name="category" class="form-control" required />
-            </div>
-            <div class="mb-3">
-              <label>Quantity</label>
-              <input type="number" [(ngModel)]="currentStock.quantity" name="quantity" class="form-control" required />
-            </div>
-            <div class="mb-3">
-              <label>Price (₹)</label>
-              <input type="number" [(ngModel)]="currentStock.price" name="price" class="form-control" required />
-            </div>
-            <div class="d-flex justify-content-end gap-2 mt-3">
-              <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancel</button>
-              <button type="submit" class="btn btn-success">{{ editMode ? 'Update' : 'Add' }}</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    }
+          }
 
-    <!-- ✅ Footer -->
-    <footer class="footer text-center mt-4">
-      <p>© {{ currentYear }} Garage Management System</p>
-    </footer>
-  </div>
+          <!-- ✅ Footer -->
+          <footer class="footer text-center mt-4">
+            <p>© {{ currentYear }} Garage Management System</p>
+          </footer>
+        </div>

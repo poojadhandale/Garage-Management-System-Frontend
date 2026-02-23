@@ -1,75 +1,112 @@
 import { HttpClientModule } from '@angular/common/http';
-import { ChangeDetectorRef, Component, Inject, NgZone, OnInit, PLATFORM_ID } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  Inject,
+  OnInit,
+  PLATFORM_ID
+} from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ServicePageApi, ServiceRecord } from '../../services/servicing-service';
 import { Router, RouterModule } from '@angular/router';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { ToastrService } from 'ngx-toastr';
-import { CustomerService } from '../../services/customer-service';
-import { Service } from '../../services/stock-service';
+
+import {
+  ServicePageApi,
+  ServiceRecord
+} from '../../services/servicing-service';
+
+import { Stock, Service as StockService } from '../../services/stock-service';
 
 @Component({
   selector: 'app-servicing',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterModule, HttpClientModule, CommonModule, FormsModule],
+  imports: [
+    ReactiveFormsModule,
+    RouterModule,
+    HttpClientModule,
+    CommonModule,
+    FormsModule
+  ],
   templateUrl: './servicing.html',
-  styleUrl: './servicing.css',
+  styleUrl: './servicing.css'
 })
-
 export class ServicingComponent implements OnInit {
 
-  username: string | null = null;
-
+  /* ===== TABLE ===== */
   services: ServiceRecord[] = [];
-  paginatedServices: ServiceRecord[] = [];
-  loading = false;
+  currentPage = 0;
+  pageSize = 10;
+  totalPages = 0;
+  totalElements = 0;
+  /* ===== UI ===== */
+  username: string | null = null;
   showModal = false;
+  loading = true;
+  searchTerm = '';
+  
+
+  /* ===== LOOKUPS ===== */
+  vehicles: any[] = [];
+  stocks: Stock[] = [];
+  filteredVehicles: any[] = [];
+  filteredStocks: Stock[] = [];
+  customerSearch = '';
+  selectedVehicle: any;
+  selectedCustomer: any;
+  editingServiceId?: number;
+  vehicleSearch = '';
+  stockSearch = '';
+  showStockDropdown = false;
+  /* ===== GST ===== */
+  gstPercentage = 18;
+  subTotal = 0;
+  gstAmount = 0;
+  grandTotal = 0;
+
+  /* ===== FORM STATE ===== */
+  currentService = {
+    serviceDate: '',
+    remarks: '',
+    itemsUsed: [] as {
+      stockId: number;
+      price: number;
+      quantityUsed: number;
+    }[],
+    labour: [] as {
+      labourDescription: string;
+      amount: number;
+    }[],
+    totalCost: 0
+  };
+  visiblePages: number[] = [];
+
+  newLabourDesc = '';
+  newLabourAmount = 0;
+
+  currentYear = new Date().getFullYear();
   editMode = false;
 
-  searchTerm = '';
-
-  currentPage = 1;
-  itemsPerPage = 10;
-  totalPages = 1;
-  currentYear = new Date().getFullYear();
-
-  customers: any[] = [];
-  stocks: any[] = [];
-  vehicleSearch: string = '';
-  stockSearch: string = '';
-  filteredCustomers: any[] = [];
-  filteredStocks: any[] = [];
-  grandTotal: number = 0;
-
-  // service form object  
-  currentService: ServiceRecord = {
-    customer: { customerName: '', email: '', phone: '', vehicleNo: '' },
-    serviceDate: '',
-    totalCost: 0,
-    remarks: '',
-    stocks: []
-  };
 
   constructor(
-    public router: Router,
     private api: ServicePageApi,
+    private stockService: StockService,
     private toastr: ToastrService,
-    private cdr: ChangeDetectorRef,
-    private zone: NgZone,
-    private customerService: CustomerService,
-    private stockService: Service,
+    public router: Router,
+    private eRef: ElementRef,
+    
     @Inject(PLATFORM_ID) private platformId: Object
   ) { }
 
-
   ngOnInit(): void {
-    if (isPlatformBrowser(this.platformId)) {
-      const userData = localStorage.getItem('user');
-      this.username = this.getFormattedUsername();
-      this.loadServices();
-      this.loadCustomersStockList();
-    }
+  if (isPlatformBrowser(this.platformId)) {
+    this.username = this.getFormattedUsername();
+    Promise.resolve().then(() => {
+    this.getServices();
+    this.loadLookups();
+    });
   }
+}
 
   getFormattedUsername(): string {
     const userData = localStorage.getItem('user');
@@ -78,268 +115,311 @@ export class ServicingComponent implements OnInit {
     return name.charAt(0).toUpperCase() + name.slice(1);
   }
 
-  loadServices(): void {
-    this.loading = true;
-    this.api.getAll().subscribe({
-      next: (data: ServiceRecord[]) => {
-        console.log('✅ Servicing:', data);
-        this.services = data;
+  /* ===== LOAD ===== */
+  getServices(): void {
+    this.loading = true; 
+    this.api.getAll(
+      this.currentPage,
+      this.pageSize,
+      this.searchTerm
+    ).subscribe({
+      next: (res) => {
+        this.services = res.data.content;
+        this.totalPages = res.data.totalPages;
+        this.totalElements = res.data.totalElements;
+         this.visiblePages = Array.from({ length: this.totalPages }, (_, i) => i);
         this.loading = false;
-        this.updatePaginatedServicing
-        this.cdr.detectChanges();
-      },
+        if (res.message) {
+          this.toastr.success(res.message);
+        }
+    },
       error: (err) => {
-        console.error('Error fetching customers:', err);
         this.loading = false;
-        this.cdr.detectChanges();
-      },
-    });
-  }
-
-  loadCustomersStockList() {
-    this.customerService.getCustomers().subscribe({
-      next: (res: any) => {
-        console.log("Loaded Customers:", res);
-        this.customers = res;
-      }
-    });
-    this.stockService.getStocks().subscribe({
-      next: (res: any) => {
-        console.log("Loaded Stocks:", res);
-        this.stocks = res;
+        this.toastr.error('Failed to load services');
       }
     });
   }
 
-  selectCustomer(c: any) {
-    this.currentService.customer = {
-      id: c.id,
-      customerName: c.customerName,
-      email: c.email,
-      phone: c.phone,
-      vehicleNo: c.vehicleNo
+
+  loadLookups(): void {
+    this.api.getVehicles().subscribe(res => {
+      this.vehicles = res.data || [];
+    });
+
+    this.stockService.getStocks().subscribe(res => {
+      this.stocks = res.data.content || [];
+    });
+  }
+
+  /* ===== VEHICLE SEARCH ===== */
+  filterVehicle(): void {
+    const term = this.vehicleSearch.toLowerCase();
+    this.filteredVehicles = this.vehicles.filter(v =>
+      v.vehicleNo.toLowerCase().includes(term)
+    );
+  }
+
+  selectVehicle(v: any): void {
+    this.selectedVehicle = v;
+    this.selectedCustomer = v.customer;
+    this.vehicleSearch = v.vehicleNo;
+    this.filteredVehicles = [];
+  }
+
+  /* ===== STOCK ===== */
+  filterStock(): void {
+    const term = this.stockSearch.trim().toLowerCase();
+
+    if (term.length > 0) {
+      this.filteredStocks = this.stocks.filter(s =>
+        s.itemName.toLowerCase().includes(term)
+      );
+      this.showStockDropdown = this.filteredStocks.length > 0;
+    } else {
+      this.filteredStocks = [];
+      this.showStockDropdown = false;
+    }
+  }
+
+  selectStock(s: Stock): void {
+    const existing = this.currentService.itemsUsed.find(i => i.stockId === s.id);
+
+    if (existing) {
+      existing.quantityUsed++;
+    } else {
+      this.currentService.itemsUsed.push({
+        stockId: s.id!,
+        price: s.price,
+        quantityUsed: 1
+      });
+    }
+
+    this.stockSearch = '';           // clear input
+    this.filteredStocks = [];        // clear list
+    this.showStockDropdown = false;  // hide dropdown
+
+    this.calculateTotals();
+  }
+
+  /* ===== TOTAL CALCULATION (FIXED) ===== */
+  calculateTotals(): void {
+    const itemTotal = this.currentService.itemsUsed.reduce(
+      (sum, i) => sum + i.price * i.quantityUsed,
+      0
+    );
+
+    const labourTotal = this.currentService.labour.reduce(
+      (sum, l) => sum + l.amount,
+      0
+    );
+
+    this.subTotal = itemTotal + labourTotal;
+    this.gstAmount = (this.subTotal * this.gstPercentage) / 100;
+    this.grandTotal = this.subTotal + this.gstAmount;
+    this.currentService.totalCost = this.grandTotal;
+  }
+
+  /* ===== LABOUR ===== */
+  addLabour(): void {
+    if (!this.newLabourDesc || this.newLabourAmount <= 0) return;
+
+    this.currentService.labour.push({
+      labourDescription: this.newLabourDesc,
+      amount: this.newLabourAmount
+    });
+
+    this.newLabourDesc = '';
+    this.newLabourAmount = 0;
+    this.calculateTotals();
+  }
+
+  removeLabour(index: number): void {
+    this.currentService.labour.splice(index, 1);
+    this.calculateTotals();
+  }
+  removeItem(index: number): void {
+  this.currentService.itemsUsed.splice(index, 1);
+  this.calculateTotals(); // if you recalculate totals manually
+}
+
+  /* ===== SAVE ===== */
+  saveServicing(): void {
+    if (!this.selectedVehicle?.id) {
+      this.toastr.error('Please select a vehicle');
+      return;
+    }
+
+    const payload = {
+      vehicleId: this.selectedVehicle.id,
+      serviceDate: this.currentService.serviceDate,
+      remarks: this.currentService.remarks,
+      totalCost: this.currentService.totalCost,
+      insuranceClaim: false,
+      itemsUsed: this.currentService.itemsUsed.map(i => ({
+        stockId: i.stockId,
+        quantityUsed: i.quantityUsed
+      })),
+      labour: this.currentService.labour
     };
 
-    this.vehicleSearch = c.vehicleNo;
-    this.filteredCustomers = [];
+    const apiCall = this.editMode
+      ? this.api.updateService(this.editingServiceId!, payload)
+      : this.api.addService(payload);
+
+    apiCall.subscribe({
+      next: res => {
+        this.toastr.success(res.message || 'Operation successful');
+        this.getServices();
+        this.closeModal();
+      },
+      error: () => {
+        this.toastr.error('Operation failed');
+      }
+    });
   }
 
-  filterStock() {
-    const term = this.stockSearch.toLowerCase().trim();
 
-    if (!term) {
-      this.filteredStocks = [];
-      return;
+  /* ===== MODAL ===== */
+  openModal(service?: ServiceRecord): void {
+    this.showModal = true;
+    this.editMode = !!service;
+
+    if (service) {
+      // ===== EDIT MODE =====
+      this.editingServiceId = service.id;
+
+      this.selectedVehicle = service.vehicle;
+      this.selectedCustomer = service.customer;
+      this.vehicleSearch = service.vehicle.vehicleNo;
+
+      this.currentService = {
+        serviceDate: service.serviceDate,
+        remarks: service.remarks,
+        itemsUsed: service.itemsUsed
+          ?.filter(i => i.stock) // guard
+          .map(i => ({
+            stockId: i.stock!.id,
+            price: i.stock!.price,
+            quantityUsed: i.quantityUsed
+          })) || [],
+        labour: service.labour?.map(l => ({
+          labourDescription: l.labourDescription,
+          amount: l.amount
+        })) || [],
+        totalCost: service.totalCost
+      };
+
+      this.calculateTotals();
+
+    } else {
+      // ===== ADD MODE =====
+      this.editingServiceId = undefined;
+      this.resetServiceForm();
     }
 
-    this.filteredStocks = this.stocks.filter(
-      (s) => s.itemName.toLowerCase().includes(term)
-    );
-
-    console.log("Filtered List:", this.filteredStocks);
   }
 
-  filterVehicle() {
-    const term = this.vehicleSearch.toLowerCase().trim();
+  resetServiceForm(): void {
+    this.selectedVehicle = null;
+    this.selectedCustomer = undefined;
+    this.vehicleSearch = '';
+    this.stockSearch = '';
+    this.filteredVehicles = [];
+    this.filteredStocks = [];
 
-    if (!term) {
-      this.filteredCustomers = [];
-      return;
-    }
+    this.currentService = {
+      serviceDate: '',
+      remarks: '',
+      itemsUsed: [],
+      labour: [],
+      totalCost: 0
+    };
 
-    this.filteredCustomers = this.customers.filter(
-      (c) => c.vehicleNo.toLowerCase().includes(term)
-    );
-
-    console.log("Filtered List:", this.filteredCustomers);
+    this.subTotal = 0;
+    this.gstAmount = 0;
+    this.grandTotal = 0;
   }
 
-  filteredServices(): ServiceRecord[] {
-    const term = this.searchTerm.toLowerCase().trim();
-    if (!term) return this.services;
-    return this.services.filter(
-      (s) =>
-        s.customer.customerName.toLowerCase().includes(term) ||
-        s.customer.vehicleNo.toLowerCase().includes(term) ||
-        s.remarks.toLowerCase().includes(term)
-    );
+  closeModal(): void {
+    this.showModal = false;
   }
 
-  updatePaginatedServicing(): void {
-    const term = this.searchTerm.toLowerCase().trim();
-    let filtered = this.services;
-    if (term) {
-      filtered = this.services.filter(
-        (s) =>
-          s.customer.customerName.toLowerCase().includes(term) ||
-          s.customer.vehicleNo.toLowerCase().includes(term) ||
-          s.remarks.toLowerCase().includes(term)
-      );
-    }
-    this.totalPages = Math.ceil(filtered.length / this.itemsPerPage);
-    const start = (this.currentPage - 1) * this.itemsPerPage;
-    const end = start + this.itemsPerPage;
-    this.paginatedServices = filtered.slice(start, end);
-    this.cdr.detectChanges(); // ensure UI sync
+  logout(): void {
+    localStorage.clear();
+    this.router.navigate(['/login']);
   }
 
-  getVisiblePages(): number[] {
-    const visibleCount = 5;
-    const start = Math.floor((this.currentPage - 1) / visibleCount) * visibleCount + 1;
-    const end = Math.min(start + visibleCount - 1, this.totalPages);
-    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  onSearch(): void {
+    this.currentPage = 0; // reset to first page
+    this.getServices();
   }
 
+ getVisiblePages(): number[] {
+    return Array.from({ length: this.totalPages }, (_, i) => i);
+  }
 
   goToPage(page: number): void {
+    if (page < 0 || page >= this.totalPages) return;
     this.currentPage = page;
-    this.updatePaginatedServicing();
+    this.getServices();
   }
 
   prevPage(): void {
-    if (this.currentPage > 1) {
+    if (this.currentPage > 0) {
       this.currentPage--;
-      this.updatePaginatedServicing();
+      this.getServices();
     }
   }
 
   nextPage(): void {
-    if (this.currentPage < this.totalPages) {
+    if (this.currentPage < this.totalPages - 1) {
       this.currentPage++;
-      this.updatePaginatedServicing();
+      this.getServices();
     }
   }
 
-  openModal(record?: ServiceRecord) {
-    this.editMode = !!record;
-    this.showModal = true;
-
-    if (record) {
-      this.currentService = JSON.parse(JSON.stringify(record));
-    } else {
-      this.currentService = {
-        customer: { customerName: '', email: '', phone: '', vehicleNo: '' },
-        serviceDate: '',
-        totalCost: 0,
-        remarks: '',
-        stocks: []
-      };
-    }
+  getStockName(stockId: number): string {
+    return this.stocks.find(s => s.id === stockId)?.itemName || '';
   }
 
-  closeModal() {
-    this.zone.run(() => (this.showModal = false));
-  }
-
-  saveService() {
-    const apiCall = this.editMode
-      ? this.api.updateService(this.currentService.id!, this.currentService)
-      : this.api.addService(this.currentService);
-
-    apiCall.subscribe({
-      next: () => {
-        this.toastr.success(this.editMode ? 'Service Updated!' : 'Service Added!');
-        this.closeModal();
-        this.loadServices();
-      },
-      error: (err) => {
-        console.error('API Error:', err);
-        this.toastr.error('Something went wrong.');
-      },
-    });
-    this.closeModal();
-    this.loadServices();
-  }
-
-  /** ✅ Delete */
-  deleteService(record: ServiceRecord) {
-    if (!record.id) return;
-    if (!confirm('Delete this service record?')) return;
-
-    this.api.deleteService(record.id).subscribe({
-      next: () => {
-        this.toastr.success('Service deleted');
-        this.loadServices();
-      },
-      error: (err) => {
-        console.error('Delete error:', err);
-        this.toastr.error('Failed to delete customer.');
-      },
-    });
-  }
-
-  /** ✅ Logout */
-  logout(): void {
-    if (isPlatformBrowser(this.platformId)) {
-      localStorage.clear();
-      sessionStorage.clear();
-    }
-    this.router.navigate(['/login']);
-  }
-
-  selectStock(s: any) {
-
-    const existing = this.currentService.stocks.find(
-      item => item.stockId === s.id
-    );
-
-    if (existing) {
-      existing.quantityUsed += 1;
-    } else {
-      this.currentService.stocks.push({
-        stockId: s.id,
-        stockName: s.itemName,
-        quantityUsed: 1,
-        price: s.price
+  deleteService(service: ServiceRecord): void {
+    if (!service.id) return;
+    if (confirm(`Delete "${service.vehicle.vehicleNo}"?`)) {
+      this.api.deleteService(service.id).subscribe({
+        next: () => {
+          this.toastr.success('Deleted successfully');
+          this.getServices();
+        },
+        error: () => {
+          this.toastr.error('Failed to delete service');
+        }
       });
     }
-
-    this.stockSearch = "";
-    this.filteredStocks = [];
-    this.calculateTotal();
+  }
+  increaseQty(item: any) {
+    item.quantityUsed++;
+    this.recalculateTotals();
   }
 
-  updateQty(index: number, change: number) {
-    const item = this.currentService.stocks[index];
-
-    item.quantityUsed += change;
-
-    if (item.quantityUsed <= 0) {
-      this.currentService.stocks.splice(index, 1);
+  decreaseQty(item: any) {
+    if (item.quantityUsed > 1) {
+      item.quantityUsed--;
+      this.recalculateTotals();
     }
+  }
+  recalculateTotals() {
+    this.subTotal = this.currentService.itemsUsed.reduce(
+      (sum, item) => sum + item.price * item.quantityUsed,
+      0
+    );
 
-    this.calculateTotal();
+    const labourTotal = this.currentService.labour.reduce(
+      (sum, l) => sum + l.amount,
+      0
+    );
+
+    this.gstAmount = (this.subTotal * this.gstPercentage) / 100;
+    this.grandTotal = this.subTotal + this.gstAmount + labourTotal;
   }
 
-  removeStock(index: number) {
-    this.currentService.stocks.splice(index, 1);
-    this.calculateTotal();
-  }
-
-  calculateTotal() {
-    this.grandTotal = this.currentService.stocks
-      .reduce((sum, item) => sum + item.price * item.quantityUsed, 0);
-
-    this.currentService.totalCost = this.grandTotal;
-  }
-
-
-  downloadBill() {
-    if (!this.currentService.id) {
-      alert("Please save service first!");
-      return;
-    }
-
-    this.api.downloadBill(this.currentService.id).subscribe({
-      next: (blob: Blob | MediaSource) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `service-bill-${this.currentService.id}.pdf`;
-        a.click();
-      },
-      error: () => alert("Bill download failed!")
-    });
-  }
 }
-

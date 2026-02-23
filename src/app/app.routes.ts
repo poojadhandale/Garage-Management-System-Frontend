@@ -6,6 +6,7 @@ import { DashboardComponent } from './pages/dashboard/dashboard';
 import { StocksComponent } from './pages/stocks/stocks';
 import { CustomersComponent } from './pages/customers/customers';
 import { ServicingComponent } from './pages/servicing/servicing';
+import { InsuranceComponent } from './pages/insurance-company/insurance-company';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -16,4 +17,5 @@ export const routes: Routes = [
   {path: 'stocks', component: StocksComponent },
   {path: 'customers', component: CustomersComponent},
   {path: 'servicing', component: ServicingComponent},
+  {path: 'insurance-company', component: InsuranceComponent}
 ];

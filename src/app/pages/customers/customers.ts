@@ -1,4 +1,4 @@
-import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { isPlatformBrowser } from '@angular/common';
 import {
   ChangeDetectorRef,
   Component,
@@ -11,31 +11,46 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { HttpClientModule } from '@angular/common/http';
 import { ToastrService } from 'ngx-toastr';
-import { Customer, CustomerService } from '../../services/customer-service';
+import { Customer, CustomerService, Vehicle } from '../../services/customer-service';
 
 @Component({
   selector: 'app-customers',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterModule, HttpClientModule, CommonModule, FormsModule],
+  imports: [ReactiveFormsModule, RouterModule, HttpClientModule, FormsModule],
   templateUrl: './customers.html',
   styleUrls: ['./customers.css'],
 })
 export class CustomersComponent implements OnInit {
   customers: Customer[] = [];
-  paginatedCustomer: Customer[] = [];
-  currentCustomer: Customer = { customerName: '', email: '', phone: '', vehicleNo: '' };
-
+  currentPage = 0;
+  pageSize = 10;
+  totalPages = 0;
+  totalElements = 0;
+  currentCustomer: Customer = {
+    customerName: '',
+    email: '',
+    phone: '',
+    address: '',
+    vehicles: [this.createEmptyVehicle()]
+  };
   username: string | null = null;
   showModal = false;
   editMode = false;
   loading = false;
   searchTerm = '';
 
-  currentPage = 1;
-  itemsPerPage = 10;
-  totalPages = 1;
-
   currentYear = new Date().getFullYear();
+
+  private createEmptyVehicle(): Vehicle {
+    return {
+      vehicleNo: '',
+      model: '',
+      customer: {
+        id: 0,
+        customerName: ''
+      }
+    };
+  }
 
   constructor(
     public router: Router,
@@ -48,10 +63,10 @@ export class CustomersComponent implements OnInit {
 
   ngOnInit(): void {
     if (isPlatformBrowser(this.platformId)) {
-      const userData = localStorage.getItem('user');
       this.username = this.getFormattedUsername();
-      this.getCustomers();
-      setTimeout(() => this.cdr.detectChanges(), 0);
+      Promise.resolve().then(() => {
+        this.getCustomers();
+      });
     }
   }
   getFormattedUsername(): string {
@@ -63,93 +78,105 @@ export class CustomersComponent implements OnInit {
 
   /** ✅ Fetch all customers */
   getCustomers(): void {
-    this.loading = true;
-    this.api.getCustomers().subscribe({
-      next: (data: Customer[]) => {
+    this.api.getCustomers(
+      this.currentPage,
+      this.pageSize
+    ).subscribe({
+      next: (res) => {
         this.zone.run(() => {
-          this.customers = data;
-          this.loading = false;
-          this.toastr.show("Customer saved successfully!");
-          this.updatePaginatedCustomers();
+          this.customers = res.data.content;
+          this.totalPages = res.data.totalPages;
+          this.totalElements = res.data.totalElements;
+          if (res.message) {
+            this.toastr.success(res.message);
+          }
+
           this.cdr.detectChanges();
         });
       },
       error: (err) => {
         console.error('Error fetching customers:', err);
-        this.loading = false;
-        this.cdr.detectChanges();
-      },
+      }
     });
   }
 
   /** ✅ Search filter */
   filteredCustomers(): Customer[] {
-    const term = this.searchTerm.toLowerCase().trim();
-    if (!term) return this.customers;
-    return this.customers.filter(
-      (c) =>
-        c.customerName.toLowerCase().includes(term) ||
-        c.email.toLowerCase().includes(term) ||
-        c.vehicleNo.toLowerCase().includes(term)
-    );
-  }
+  const term = this.searchTerm.toLowerCase().trim();
+  if (!term) return this.customers;
 
-  updatePaginatedCustomers(): void {
-    const term = this.searchTerm.toLowerCase().trim();
-    let filtered = this.customers;
-    if (term) {
-      filtered = this.customers.filter(
-        (c) =>
-          c.customerName.toLowerCase().includes(term) ||
-          c.email.toLowerCase().includes(term) ||
-          c.vehicleNo.toLowerCase().includes(term)
-      );
-    }
-    this.totalPages = Math.ceil(filtered.length / this.itemsPerPage);
-    const start = (this.currentPage - 1) * this.itemsPerPage;
-    const end = start + this.itemsPerPage;
-    this.paginatedCustomer = filtered.slice(start, end);
-    this.cdr.detectChanges(); // ensure UI sync
+  return this.customers.filter(c =>
+    c.customerName?.toLowerCase().includes(term) ||
+    c.email?.toLowerCase().includes(term) ||
+    c.vehicles?.some(v =>
+      v.vehicleNo?.toLowerCase().includes(term) ||
+      v.model?.toLowerCase().includes(term)
+    )
+  );
+}
+
+  onSearch(): void {
+     this.currentPage = 0; 
+     this.getCustomers();
   }
 
   getVisiblePages(): number[] {
-    const visibleCount = 5;
-    const start = Math.floor((this.currentPage - 1) / visibleCount) * visibleCount + 1;
-    const end = Math.min(start + visibleCount - 1, this.totalPages);
-    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+    return Array.from({ length: this.totalPages }, (_, i) => i);
   }
 
   goToPage(page: number): void {
+    if (page < 0 || page >= this.totalPages) return;
     this.currentPage = page;
-    this.updatePaginatedCustomers();
+    this.getCustomers();
   }
 
   prevPage(): void {
-    if (this.currentPage > 1) {
+    if (this.currentPage > 0) {
       this.currentPage--;
-      this.updatePaginatedCustomers();
+      this.getCustomers();
     }
   }
 
   nextPage(): void {
-    if (this.currentPage < this.totalPages) {
+    if (this.currentPage < this.totalPages - 1) {
       this.currentPage++;
-      this.updatePaginatedCustomers();
+      this.getCustomers();
+    }
+  }
+
+  addVehicle(): void {
+    this.currentCustomer.vehicles.push(this.createEmptyVehicle());
+  }
+
+  removeVehicle(index: number): void {
+    if (this.currentCustomer.vehicles.length > 1) {
+      this.currentCustomer.vehicles.splice(index, 1);
     }
   }
 
   /** ✅ Modal controls */
-  openModal(customer?: any) {
-    this.zone.run(() => {
-      this.showModal = true;
-      this.editMode = !!customer;
+  openModal(customer?: Customer): void {
+    this.showModal = true;
+    this.editMode = !!customer;
 
-      this.currentCustomer = customer
-        ? { ...customer }
-        : { customerName: '', email: '', phone: '', vehicleNo: '' };
-
-      this.cdr.detectChanges();
-    });
+    this.currentCustomer = customer
+      ? {
+        ...customer,
+        vehicles: customer.vehicles?.length
+          ? customer.vehicles.map(v => ({
+            vehicleNo: v.vehicleNo,
+            model: v.model,
+            customer: { ...v.customer }
+          }))
+          : [this.createEmptyVehicle()]
+      }
+      : {
+        customerName: '',
+        email: '',
+        phone: '',
+        address: '',
+        vehicles: [this.createEmptyVehicle()]
+      };
   }
 
   closeModal() {
@@ -167,22 +194,20 @@ export class CustomersComponent implements OnInit {
 
     apiCall.subscribe({
       next: (res) => {
-        this.toastr.success(
-          res.message || (this.editMode ? 'Customer updated!' : 'Customer added!')
-        );
+        this.toastr.success(res.message || 'Operation successful');
         this.zone.run(() => {
           this.getCustomers();
           this.closeModal();
-          this.cdr.detectChanges();
         });
       },
       error: (err) => {
         console.error('API Error:', err);
-        this.toastr.error('Something went wrong.');
-      },
+        this.toastr.error(err.error?.message || 'Something went wrong');
+      }
     });
     this.closeModal();
   }
+
 
   /** ✅ Edit Customer */
   editCustomer(customer: Customer): void {
@@ -191,19 +216,22 @@ export class CustomersComponent implements OnInit {
 
   /** ✅ Delete */
   deleteCustomer(customer: Customer): void {
-    if (customer.id && confirm(`Delete "${customer.customerName}"?`)) {
+    if (!customer.id) return;
+
+    if (confirm(`Delete "${customer.customerName}"?`)) {
       this.api.deleteCustomer(customer.id).subscribe({
         next: () => {
           this.toastr.success('Customer deleted!');
-          this.zone.run(() => this.getCustomers());
+          this.getCustomers(); // just reload page data
         },
         error: (err) => {
           console.error('Delete error:', err);
           this.toastr.error('Failed to delete customer.');
-        },
+        }
       });
     }
   }
+
 
   /** ✅ Logout */
   logout(): void {

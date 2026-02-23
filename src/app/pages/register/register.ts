@@ -3,11 +3,11 @@ import { OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
 import { Router, RouterModule } from '@angular/router';
-import { CommonModule } from '@angular/common';
+
 
 @Component({
   selector: 'app-register',
-  imports: [ReactiveFormsModule, RouterModule, HttpClientModule, CommonModule, FormsModule],
+  imports: [ReactiveFormsModule, RouterModule, HttpClientModule, FormsModule],
   templateUrl: './register.html',
   styleUrl: './register.css',
 })
