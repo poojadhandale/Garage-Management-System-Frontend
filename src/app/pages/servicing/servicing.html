@@ -36,12 +36,12 @@
       </div>
 
       <!-- ✅ Loader -->
-      @if (loading) {
-      <div class="text-center p-3 text-primary fw-semibold">
-        <div class="spinner-border text-primary me-2" role="status"></div>
-        Loading servicing...
-      </div>
-      }
+       @if (loading) {
+          <div class="text-center p-3 text-primary fw-semibold">
+            <div class="spinner-border text-primary me-2" role="status"></div>
+            Loading servicing...
+          </div>
+        }
 
       <!-- TABLE -->
       @if (!loading)
@@ -97,6 +97,7 @@
             }
           </tbody>
         </table>
+         @if (totalPages > 1 && services.length) {
         <div class="pagination-container mt-3">
           <button class="btn btn-outline-primary btn-sm" (click)="prevPage()" [disabled]="currentPage === 0">
             ‹ Prev
@@ -107,10 +108,11 @@
           </button>
           }
           <button class="btn btn-outline-primary btn-sm" (click)="nextPage()"
-            [disabled]="currentPage === totalPages - 1">
+            [disabled]="totalPages === 0 || currentPage >= totalPages - 1">
             Next ›
           </button>
         </div>
+      }
       </div>
       }
     </div>

@@ -48,7 +48,7 @@ export interface ServiceRecord {
   totalCost: number;
   remarks: string;
   insuranceClaim: boolean;
-
+  insuranceCompanyId: number;
   customer: {
     id: number;
     customerName: string;

@@ -42,7 +42,7 @@ export class ServicingComponent implements OnInit {
   /* ===== UI ===== */
   username: string | null = null;
   showModal = false;
-  loading = true;
+  loading = false;
   searchTerm = '';
   
 
@@ -99,14 +99,13 @@ export class ServicingComponent implements OnInit {
   ) { }
 
   ngOnInit(): void {
-  if (isPlatformBrowser(this.platformId)) {
-    this.username = this.getFormattedUsername();
-    Promise.resolve().then(() => {
-    this.getServices();
-    this.loadLookups();
-    });
+    if (isPlatformBrowser(this.platformId)) {
+      this.username = this.getFormattedUsername();
+      this.getServices();
+      this.loadLookups();
+      }
+    }
   }
-}
 
   getFormattedUsername(): string {
     const userData = localStorage.getItem('user');
@@ -117,29 +116,36 @@ export class ServicingComponent implements OnInit {
 
   /* ===== LOAD ===== */
   getServices(): void {
-    this.loading = true; 
+     this.loading = true;
+    this.services = [];
+    this.totalPages = 0;
+    this.totalElements = 0;
+    this.visiblePages = [];
     this.api.getAll(
       this.currentPage,
       this.pageSize,
       this.searchTerm
     ).subscribe({
       next: (res) => {
-        this.services = res.data.content;
-        this.totalPages = res.data.totalPages;
-        this.totalElements = res.data.totalElements;
-         this.visiblePages = Array.from({ length: this.totalPages }, (_, i) => i);
-        this.loading = false;
-        if (res.message) {
-          this.toastr.success(res.message);
-        }
+        const pageData = res?.data;
+        this.services = pageData?.content ?? [];
+        this.totalPages = Math.max(pageData?.totalPages ?? 0, 0);
+        this.totalElements = Math.max(pageData?.totalElements ?? 0, 0);
+        this.currentPage = Math.min(this.currentPage, Math.max(this.totalPages - 1, 0));
+        this.visiblePages = Array.from({ length: this.totalPages }, (_, i) => i);
+        this.loading = false;       
     },
-      error: (err) => {
+      error: () => {
         this.loading = false;
+        this.services = [];
+        this.totalPages = 0;
+        this.totalElements = 0;
+        this.visiblePages = [];
+        this.currentPage = 0;
         this.toastr.error('Failed to load services');
       }
     });
   }
-
 
   loadLookups(): void {
     this.api.getVehicles().subscribe(res => {
@@ -237,10 +243,11 @@ export class ServicingComponent implements OnInit {
     this.currentService.labour.splice(index, 1);
     this.calculateTotals();
   }
+
   removeItem(index: number): void {
   this.currentService.itemsUsed.splice(index, 1);
   this.calculateTotals(); // if you recalculate totals manually
-}
+  }
 
   /* ===== SAVE ===== */
   saveServicing(): void {
@@ -341,7 +348,10 @@ export class ServicingComponent implements OnInit {
   }
 
   closeModal(): void {
-    this.showModal = false;
+  this.showModal = false;
+  this.editMode = false;
+  this.editingServiceId = undefined;
+  this.resetServiceForm();
   }
 
   logout(): void {
@@ -398,28 +408,13 @@ export class ServicingComponent implements OnInit {
   }
   increaseQty(item: any) {
     item.quantityUsed++;
-    this.recalculateTotals();
+     this.calculateTotals();
   }
 
   decreaseQty(item: any) {
     if (item.quantityUsed > 1) {
       item.quantityUsed--;
-      this.recalculateTotals();
+       this.calculateTotals();
     }
   }
-  recalculateTotals() {
-    this.subTotal = this.currentService.itemsUsed.reduce(
-      (sum, item) => sum + item.price * item.quantityUsed,
-      0
-    );
-
-    const labourTotal = this.currentService.labour.reduce(
-      (sum, l) => sum + l.amount,
-      0
-    );
-
-    this.gstAmount = (this.subTotal * this.gstPercentage) / 100;
-    this.grandTotal = this.subTotal + this.gstAmount + labourTotal;
-  }
-
 }
