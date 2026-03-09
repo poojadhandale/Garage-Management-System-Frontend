@@ -1,23 +1,13 @@
 import { HttpClientModule } from '@angular/common/http';
-import {
-  Component,
-  ElementRef,
-  Inject,
-  OnInit,
-  PLATFORM_ID
-} from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { Component, Inject, OnInit, PLATFORM_ID } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
-import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { ToastrService } from 'ngx-toastr';
 
-import {
-  ServicePageApi,
-  ServiceRecord
-} from '../../services/servicing-service';
-
+import { ServicePageApi, ServiceRecord } from '../../services/servicing-service';
 import { Stock, Service as StockService } from '../../services/stock-service';
-
+import { InsuranceCompany, InsurnaceCompanyServices } from '../../services/insurnace-company-services';
 @Component({
   selector: 'app-servicing',
   standalone: true,
@@ -48,16 +38,18 @@ export class ServicingComponent implements OnInit {
 
   /* ===== LOOKUPS ===== */
   vehicles: any[] = [];
+  insuranceCompanies: InsuranceCompany[] = [];
   stocks: Stock[] = [];
   filteredVehicles: any[] = [];
   filteredStocks: Stock[] = [];
-  customerSearch = '';
   selectedVehicle: any;
   selectedCustomer: any;
   editingServiceId?: number;
   vehicleSearch = '';
   stockSearch = '';
   showStockDropdown = false;
+  visiblePages: number[] = [];
+
   /* ===== GST ===== */
   gstPercentage = 18;
   subTotal = 0;
@@ -65,9 +57,12 @@ export class ServicingComponent implements OnInit {
   grandTotal = 0;
 
   /* ===== FORM STATE ===== */
+  
   currentService = {
     serviceDate: '',
     remarks: '',
+    insuranceClaim: false,
+    insuranceCompanyId: null as number | null,
     itemsUsed: [] as {
       stockId: number;
       price: number;
@@ -79,11 +74,9 @@ export class ServicingComponent implements OnInit {
     }[],
     totalCost: 0
   };
-  visiblePages: number[] = [];
-
+  
   newLabourDesc = '';
   newLabourAmount = 0;
-
   currentYear = new Date().getFullYear();
   editMode = false;
 
@@ -92,8 +85,8 @@ export class ServicingComponent implements OnInit {
     private api: ServicePageApi,
     private stockService: StockService,
     private toastr: ToastrService,
+    private insuranceCompanyService: InsurnaceCompanyServices,
     public router: Router,
-    private eRef: ElementRef,
     
     @Inject(PLATFORM_ID) private platformId: Object
   ) { }
@@ -101,10 +94,11 @@ export class ServicingComponent implements OnInit {
   ngOnInit(): void {
     if (isPlatformBrowser(this.platformId)) {
       this.username = this.getFormattedUsername();
-      this.getServices();
-      this.loadLookups();
-      }
-    }
+     setTimeout(() => {
+        this.getServices();
+        this.loadLookups();
+      });
+  }
   }
 
   getFormattedUsername(): string {
@@ -116,24 +110,22 @@ export class ServicingComponent implements OnInit {
 
   /* ===== LOAD ===== */
   getServices(): void {
-     this.loading = true;
+    this.loading = true;
     this.services = [];
     this.totalPages = 0;
     this.totalElements = 0;
     this.visiblePages = [];
-    this.api.getAll(
-      this.currentPage,
-      this.pageSize,
-      this.searchTerm
-    ).subscribe({
-      next: (res) => {
+
+    this.api.getAll(this.currentPage, this.pageSize, this.searchTerm).subscribe({
+      next: (res: any) => {
         const pageData = res?.data;
+
         this.services = pageData?.content ?? [];
         this.totalPages = Math.max(pageData?.totalPages ?? 0, 0);
         this.totalElements = Math.max(pageData?.totalElements ?? 0, 0);
         this.currentPage = Math.min(this.currentPage, Math.max(this.totalPages - 1, 0));
         this.visiblePages = Array.from({ length: this.totalPages }, (_, i) => i);
-        this.loading = false;       
+        this.loading = false;     
     },
       error: () => {
         this.loading = false;
@@ -148,20 +140,40 @@ export class ServicingComponent implements OnInit {
   }
 
   loadLookups(): void {
-    this.api.getVehicles().subscribe(res => {
-      this.vehicles = res.data || [];
+     this.api.getVehicles().subscribe({
+      next: (res: any) => {
+        this.vehicles = res?.data ?? [];
+      },
+      error: () => {
+        this.vehicles = [];
+      }
     });
 
-    this.stockService.getStocks().subscribe(res => {
-      this.stocks = res.data.content || [];
+    this.insuranceCompanyService.getAll(0, 1000).subscribe({
+      next: (res) => {
+        const companies = res?.data?.content || [];
+        this.insuranceCompanies = companies.filter(c => c.active);
+      },
+      error: () => {
+        this.insuranceCompanies = [];
+      }
+    });
+
+    this.stockService.getStocks().subscribe({
+      next: (res: any) => {
+        this.stocks = res?.data?.content ?? [];
+      },
+      error: () => {
+        this.stocks = [];
+      }
     });
   }
 
   /* ===== VEHICLE SEARCH ===== */
   filterVehicle(): void {
     const term = this.vehicleSearch.toLowerCase();
-    this.filteredVehicles = this.vehicles.filter(v =>
-      v.vehicleNo.toLowerCase().includes(term)
+   this.filteredVehicles = this.vehicles.filter(
+      (v: any) => typeof v?.vehicleNo === 'string' && v.vehicleNo.toLowerCase().includes(term)
     );
   }
 
@@ -177,9 +189,7 @@ export class ServicingComponent implements OnInit {
     const term = this.stockSearch.trim().toLowerCase();
 
     if (term.length > 0) {
-      this.filteredStocks = this.stocks.filter(s =>
-        s.itemName.toLowerCase().includes(term)
-      );
+    this.filteredStocks = this.stocks.filter((s) => s.itemName.toLowerCase().includes(term));
       this.showStockDropdown = this.filteredStocks.length > 0;
     } else {
       this.filteredStocks = [];
@@ -188,7 +198,7 @@ export class ServicingComponent implements OnInit {
   }
 
   selectStock(s: Stock): void {
-    const existing = this.currentService.itemsUsed.find(i => i.stockId === s.id);
+    const existing = this.currentService.itemsUsed.find((i) => i.stockId === s.id);
 
     if (existing) {
       existing.quantityUsed++;
@@ -200,24 +210,20 @@ export class ServicingComponent implements OnInit {
       });
     }
 
-    this.stockSearch = '';           // clear input
-    this.filteredStocks = [];        // clear list
-    this.showStockDropdown = false;  // hide dropdown
-
+    this.stockSearch = '';           
+    this.filteredStocks = [];        
+    this.showStockDropdown = false;  
     this.calculateTotals();
   }
 
-  /* ===== TOTAL CALCULATION (FIXED) ===== */
+  /* ===== TOTAL CALCULATION ===== */
   calculateTotals(): void {
     const itemTotal = this.currentService.itemsUsed.reduce(
       (sum, i) => sum + i.price * i.quantityUsed,
       0
     );
 
-    const labourTotal = this.currentService.labour.reduce(
-      (sum, l) => sum + l.amount,
-      0
-    );
+    const labourTotal = this.currentService.labour.reduce((sum, l) => sum + l.amount, 0);
 
     this.subTotal = itemTotal + labourTotal;
     this.gstAmount = (this.subTotal * this.gstPercentage) / 100;
@@ -227,8 +233,9 @@ export class ServicingComponent implements OnInit {
 
   /* ===== LABOUR ===== */
   addLabour(): void {
-    if (!this.newLabourDesc || this.newLabourAmount <= 0) return;
-
+   if (!this.newLabourDesc || this.newLabourAmount <= 0) {
+      return;
+    }
     this.currentService.labour.push({
       labourDescription: this.newLabourDesc,
       amount: this.newLabourAmount
@@ -245,8 +252,8 @@ export class ServicingComponent implements OnInit {
   }
 
   removeItem(index: number): void {
-  this.currentService.itemsUsed.splice(index, 1);
-  this.calculateTotals(); // if you recalculate totals manually
+    this.currentService.itemsUsed.splice(index, 1);
+    this.calculateTotals();
   }
 
   /* ===== SAVE ===== */
@@ -256,13 +263,21 @@ export class ServicingComponent implements OnInit {
       return;
     }
 
+    if (this.currentService.insuranceClaim && !this.currentService.insuranceCompanyId) {
+      this.toastr.error('Please select an insurance company');
+      return;
+    }
+
     const payload = {
       vehicleId: this.selectedVehicle.id,
       serviceDate: this.currentService.serviceDate,
       remarks: this.currentService.remarks,
       totalCost: this.currentService.totalCost,
-      insuranceClaim: false,
-      itemsUsed: this.currentService.itemsUsed.map(i => ({
+       insuranceClaim: this.currentService.insuranceClaim,
+      insuranceCompanyId: this.currentService.insuranceClaim
+        ? this.currentService.insuranceCompanyId || undefined
+        : undefined,
+      itemsUsed: this.currentService.itemsUsed.map((i) => ({
         stockId: i.stockId,
         quantityUsed: i.quantityUsed
       })),
@@ -274,17 +289,17 @@ export class ServicingComponent implements OnInit {
       : this.api.addService(payload);
 
     apiCall.subscribe({
-      next: res => {
-        this.toastr.success(res.message || 'Operation successful');
-        this.getServices();
+      next: (res: any) => {
+        this.toastr.success(res?.message || 'Operation successful');
         this.closeModal();
+        this.getServices();
       },
       error: () => {
         this.toastr.error('Operation failed');
+         this.closeModal();
       }
     });
   }
-
 
   /* ===== MODAL ===== */
   openModal(service?: ServiceRecord): void {
@@ -292,34 +307,34 @@ export class ServicingComponent implements OnInit {
     this.editMode = !!service;
 
     if (service) {
-      // ===== EDIT MODE =====
       this.editingServiceId = service.id;
-
       this.selectedVehicle = service.vehicle;
       this.selectedCustomer = service.customer;
       this.vehicleSearch = service.vehicle.vehicleNo;
-
       this.currentService = {
         serviceDate: service.serviceDate,
         remarks: service.remarks,
-        itemsUsed: service.itemsUsed
-          ?.filter(i => i.stock) // guard
-          .map(i => ({
-            stockId: i.stock!.id,
-            price: i.stock!.price,
-            quantityUsed: i.quantityUsed
+         insuranceClaim: service.insuranceClaim,
+        insuranceCompanyId: service.insuranceCompanyId || null,
+         itemsUsed:
+          service.itemsUsed
+            ?.filter((i) => i.stock)
+            .map((i) => ({
+              stockId: i.stock!.id,
+              price: i.stock!.price,
+              quantityUsed: i.quantityUsed
+            })) || [],
+        labour:
+          service.labour?.map((l) => ({
+            labourDescription: l.labourDescription,
+            amount: l.amount
           })) || [],
-        labour: service.labour?.map(l => ({
-          labourDescription: l.labourDescription,
-          amount: l.amount
-        })) || [],
         totalCost: service.totalCost
       };
 
       this.calculateTotals();
 
     } else {
-      // ===== ADD MODE =====
       this.editingServiceId = undefined;
       this.resetServiceForm();
     }
@@ -337,6 +352,8 @@ export class ServicingComponent implements OnInit {
     this.currentService = {
       serviceDate: '',
       remarks: '',
+      insuranceClaim: false,
+      insuranceCompanyId: null,
       itemsUsed: [],
       labour: [],
       totalCost: 0
@@ -348,28 +365,43 @@ export class ServicingComponent implements OnInit {
   }
 
   closeModal(): void {
-  this.showModal = false;
-  this.editMode = false;
-  this.editingServiceId = undefined;
-  this.resetServiceForm();
+    this.showModal = false;
+    this.editMode = false;
+    this.editingServiceId = undefined;
+    this.resetServiceForm();
   }
 
+   get selectedInsuranceCompany(): InsuranceCompany | undefined {
+    return this.insuranceCompanies.find(
+      company => company.id === this.currentService.insuranceCompanyId
+    );
+  }
+
+  onInsuranceClaimToggle(): void {
+    if (!this.currentService.insuranceClaim) {
+      this.currentService.insuranceCompanyId = null;
+    }
+  }
+  
   logout(): void {
     localStorage.clear();
     this.router.navigate(['/login']);
   }
 
   onSearch(): void {
-    this.currentPage = 0; // reset to first page
+    this.currentPage = 0; 
     this.getServices();
   }
 
- getVisiblePages(): number[] {
+  getVisiblePages(): number[] {
     return Array.from({ length: this.totalPages }, (_, i) => i);
   }
 
   goToPage(page: number): void {
-    if (page < 0 || page >= this.totalPages) return;
+    if (page < 0 || page >= this.totalPages) {
+      return;
+    }
+
     this.currentPage = page;
     this.getServices();
   }
@@ -389,11 +421,14 @@ export class ServicingComponent implements OnInit {
   }
 
   getStockName(stockId: number): string {
-    return this.stocks.find(s => s.id === stockId)?.itemName || '';
+   return this.stocks.find((s) => s.id === stockId)?.itemName || '';
   }
 
   deleteService(service: ServiceRecord): void {
-    if (!service.id) return;
+     if (!service.id) {
+      return;
+    }
+
     if (confirm(`Delete "${service.vehicle.vehicleNo}"?`)) {
       this.api.deleteService(service.id).subscribe({
         next: () => {
@@ -406,12 +441,36 @@ export class ServicingComponent implements OnInit {
       });
     }
   }
-  increaseQty(item: any) {
+
+  downloadBill(service: ServiceRecord): void {
+    if (!service.id) {
+      this.toastr.error('Invalid service record');
+      return;
+    }
+
+    this.api.generateBill(service.id).subscribe({
+      next: (blob: Blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        const vehicleNo = service.vehicle?.vehicleNo || 'vehicle';
+        anchor.href = url;
+        anchor.download = `bill-${vehicleNo}-${service.id}.pdf`;
+        anchor.click();
+        window.URL.revokeObjectURL(url);
+        this.toastr.success('Bill downloaded');
+      },
+      error: () => {
+        this.toastr.error('Failed to generate bill');
+      }
+    });
+  }
+  
+  increaseQty(item: any): void {
     item.quantityUsed++;
      this.calculateTotals();
   }
 
-  decreaseQty(item: any) {
+  decreaseQty(item: any): void {
     if (item.quantityUsed > 1) {
       item.quantityUsed--;
        this.calculateTotals();

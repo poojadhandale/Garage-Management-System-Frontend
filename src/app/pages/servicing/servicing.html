@@ -81,6 +81,9 @@
                 </ul>
               </td>
               <td>
+                <button class="btn btn-download btn-sm me-2" (click)="downloadBill(s)" title="Download Bill">
+                  <i class="fa-solid fa-download"></i>
+                </button>
                 <button class="btn btn-warning btn-sm me-2" (click)="openModal(s)">
                   <i class="fa-solid fa-pen"></i>
                 </button>
@@ -97,12 +100,11 @@
             }
           </tbody>
         </table>
-         @if (totalPages > 1 && services.length) {
         <div class="pagination-container mt-3">
           <button class="btn btn-outline-primary btn-sm" (click)="prevPage()" [disabled]="currentPage === 0">
             ‹ Prev
           </button>
-          @for (page of visiblePages; track page) {
+         @for (page of getVisiblePages(); track page) {
           <button class="page-btn" [class.active]="currentPage === page" (click)="goToPage(page)">
             {{ page + 1 }}
           </button>
@@ -112,7 +114,6 @@
             Next ›
           </button>
         </div>
-      }
       </div>
       }
     </div>
@@ -169,6 +170,54 @@
             <input class="form-control" [(ngModel)]="currentService.remarks" name="remarks" autocomplete="off" />
           </div>
         </div>
+        <div class="mb-3">
+          <div class="form-check">
+            <input
+              id="insuranceClaim"
+              type="checkbox"
+              class="form-check-input"
+              [(ngModel)]="currentService.insuranceClaim"
+              name="insuranceClaim"
+              (change)="onInsuranceClaimToggle()"
+            />
+            <label for="insuranceClaim" class="form-check-label fw-semibold">
+              Insurance Claim
+            </label>
+          </div>
+        </div>
+
+        @if (currentService.insuranceClaim) {
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="fw-semibold">Insurance Company</label>
+            <select
+              class="form-select"
+              [(ngModel)]="currentService.insuranceCompanyId"
+              name="insuranceCompanyId"
+              required
+            >
+              <option [ngValue]="null" disabled>Select insurance company</option>
+              @for (company of insuranceCompanies; track company.id) {
+              <option [ngValue]="company.id">{{ company.companyName }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="col-md-6">
+            <label class="fw-semibold">Company Name</label>
+            <input class="form-control" [value]="selectedInsuranceCompany?.companyName || ''" readonly />
+          </div>
+          <div class="col-md-6">
+            <label class="fw-semibold">Phone</label>
+            <input class="form-control" [value]="selectedInsuranceCompany?.contactNumber || ''" readonly />
+          </div>
+          <div class="col-md-6">
+            <label class="fw-semibold">Email</label>
+            <input class="form-control" [value]="selectedInsuranceCompany?.email || ''" readonly />
+          </div>
+        </div>
+        }
+        
         <!-- STOCK SEARCH -->
         <div class="mb-3 position-relative">
           <label class="fw-semibold">Add Stock Items</label>
@@ -287,7 +336,7 @@
           <button type="button" class="btn btn-secondary" (click)="closeModal()">
             Cancel
           </button>
-          <button type="submit" class="btn btn-success">
+          <button type="submit" class="btn btn-success" >
             Save Service
           </button>
         </div>

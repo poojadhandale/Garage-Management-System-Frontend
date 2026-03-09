@@ -20,6 +20,7 @@ export interface ServicingRequest {
   remarks: string;
   totalCost: number;
   insuranceClaim: boolean;
+  insuranceCompanyId?: number;
 
   itemsUsed: {
     stockId: number;
@@ -157,6 +158,14 @@ export class ServicePageApi {
   deleteService(id: number): Observable<any> {
     return this.http.delete(`${this.baseUrl}/services/${id}`, {
       headers: this.getHeaders()
+    });
+  }
+
+  /** ✅ Generate bill PDF for a service */
+  generateBill(id: number): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/services/${id}/bill`, {
+      headers: this.getHeaders(),
+      responseType: 'blob'
     });
   }
 }
